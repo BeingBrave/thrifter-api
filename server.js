@@ -2,7 +2,9 @@ const Hapi = require('hapi');
 const Boom = require('boom');
 const AuthBearer = require('hapi-auth-bearer-token');
 const HapiMongoModels = require('hapi-mongo-models');
+const Uuid = require('node-uuid');
 const Request = require('request');
+const dhash = require('dhash');
 
 const server = new Hapi.Server();
 server.connection({ port: 3333 });
@@ -16,7 +18,8 @@ server.register({
         },
         autoIndex: false,
         models: {
-            User: './models/user.js'
+            User: './models/user.js',
+            Item: './models/item.js'
         }
     }
 }, (err) => {
@@ -43,9 +46,9 @@ server.register(AuthBearer, (err) => {
                     var profile = JSON.parse(body);
 
                     return callback(null, true, {
-                        username: profile.username,
-                        name: profile.name,
-                        email: profile.email,
+                        username: profile.username || "hi",
+                        name: profile.name || "hi",
+                        email: profile.email || "hi@hi",
                         token: token
                     });
                 } else {
@@ -80,19 +83,33 @@ server.route({
     config: {
        auth: 'facebook_auth',
        handler: function (request, reply) {
+            const User = request.server.plugins['hapi-mongo-models'].User;
+
             try {
-                User.insertOne({
-                    username: request.auth.credentials.username,
-                    name: request.auth.credentials.name,
-                    email: request.auth.credentials.email,
-                    facebookId: request.auth.credentials.token,
-                    access_token: "4321"
+
+                User.findOne({
+                    facebookId: request.auth.credentials.token
                 }, (err, result) => {
                     if (err) {
-                        return reply(err);
+                        User.insertOne({
+                            uuid: Uuid.v4(),
+                            username: request.auth.credentials.username,
+                            name: request.auth.credentials.name,
+                            email: request.auth.credentials.email,
+                            facebookId: request.auth.credentials.token,
+                            access_token: Uuid.v4()
+                        }, (err, result) => {
+                            if (err) {
+                                return reply(err);
+                            }
+
+                            return reply(result.access_token);
+                        });
+
+                    } else {
+                        return reply(result.access_token);
                     }
 
-                    return reply('success api');
                 });
 
             } catch(err) {
@@ -108,7 +125,9 @@ server.route({
     config: {
        auth: 'api_auth',
        handler: function (request, reply) {
-          try {
+            const User = request.server.plugins['hapi-mongo-models'].User;
+
+            try {
                 User.findOne({
                     access_token: request.auth.credentials.token
                 }, (err, result) => {
@@ -122,25 +141,6 @@ server.route({
             } catch(err) {
                 return reply('fail api');
             }
-       }
-    }
-});
-
-server.route({
-    method: 'GET',
-    path: '/user/{id}',
-    config: {
-        auth: 'api_auth',
-        handler: function (request, reply) {
-            const User = request.server.plugins['hapi-mongo-models'].User;
-
-            User.findOne({access_token: request.query.access_token}, (err, results) => {
-                if (err) {
-                    return reply(err);
-                }
-
-                reply(results);
-            });
         }
     }
 });
@@ -151,11 +151,30 @@ server.route({
     config: {
         auth: 'api_auth',
         handler: function (request, reply) {
+            const Item = request.server.plugins['hapi-mongo-models'].Item;
 
+            try {
+                Item.findOne({
+                    uuid: request.
+                }, (err, result) => {
+                    if (err) {
+                        return reply(err);
+                    }
+
+                    return reply(result);
+                });
+
+            } catch(err) {
+                return reply('fail api');
+            }
         }
     }
 });
 
+/**
+*   POST: name, file
+*
+*/
 server.route({
     method: 'POST',
     path: '/item',
@@ -169,9 +188,12 @@ server.route({
         },
 
         handler: function (request, reply) {
+            const Item = request.server.plugins['hapi-mongo-models'].Item;
+
             var data = request.payload;
+
             if (data.file) {
-                var name = data.file.hapi.filename;
+                var name = data.file.hapi.filename; // TODO: Fix this
                 var path = __dirname + "/data/" + name;
                 var file = fs.createWriteStream(path);
 
@@ -182,12 +204,25 @@ server.route({
                 data.file.pipe(file);
 
                 data.file.on('end', function (err) {
-                    reply(JSON.stringify({
-                        "status": "okay"
-                    }));
+                    dhash(path, function(err, hash){
+
+                        Item.insertOne({
+                            uuid: Uuid.v4(),
+                            name: data.name,
+                            imageHash: hash,
+                            owner: request.auth.credentials.uuid,
+                        }, (err, result) => {
+                            if (err) {
+                                return reply(err);
+                            }
+
+                            return reply(result);
+                        });
+
+
+                    });
                 })
             }
-
         }
     }
 });

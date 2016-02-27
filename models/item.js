@@ -2,7 +2,7 @@ const Joi = require('joi');
 const ObjectAssign = require('object-assign');
 const BaseModel = require('hapi-mongo-models').BaseModel;
 
-const User = BaseModel.extend({
+const Item = BaseModel.extend({
     // instance prototype
     constructor: function (attrs) {
 
@@ -10,15 +10,13 @@ const User = BaseModel.extend({
     }
 });
 
-User._collection = 'users';
+Item._collection = 'items';
 
-User.schema = Joi.object().keys({
+Item.schema = Joi.object().keys({
 	uuid: Joi.string(),
-    username: Joi.string().alphanum().required(),
+    imageHash: Joi.string().alphanum().required(),
     name: Joi.string().alphanum().required(),
-    email: Joi.string().email().required(),
-    facebookId: [Joi.string(), Joi.number()],
-    access_token: [Joi.string(), Joi.number()]
+    owner: Joi.string()
 })
 
-module.exports = User;
+module.exports = Item;
