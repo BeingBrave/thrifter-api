@@ -7,6 +7,7 @@
   },
   "dependencies": {
     "boom": "^3.1.2",
+    "dhash": "0.0.4",
     "dhash-image": "^1.2.1",
     "hapi": "^13.0.0",
     "hapi-auth-bearer-token": "^4.0.0",
@@ -14,6 +15,7 @@
     "hapi-mongodb": "^6.0.0",
     "joi": "^8.0.3",
     "mongodb": "^2.1.7",
+    "node-uuid": "^1.4.7",
     "object-assign": "^4.0.1",
     "request": "^2.69.0"
   }

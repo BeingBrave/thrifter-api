@@ -5,6 +5,7 @@ const HapiMongoModels = require('hapi-mongo-models');
 const Uuid = require('node-uuid');
 const Request = require('request');
 const dhash = require('dhash');
+const fs = require('fs');
 
 const server = new Hapi.Server();
 server.connection({ port: 3333 });
@@ -39,11 +40,12 @@ server.register(AuthBearer, (err) => {
             var request = this;
             const User = request.server.plugins['hapi-mongo-models'].User;
 
-            Request('https://graph.facebook.com/me?access_token=' + token, function (error, response, body) {
-                console.log(response);
-                console.log(body);
-                if (!error && response.statusCode == 200) {
-                    var profile = JSON.parse(body);
+            //Request('https://graph.facebook.com/me?access_token=' + token, function (error, response, body) {
+                //console.log(response);
+                //console.log(body);
+                //if (!error && response.statusCode == 200) {
+                    //var profile = JSON.parse(body);
+                    var profile = {};
 
                     return callback(null, true, {
                         username: profile.username || "hi",
@@ -51,10 +53,10 @@ server.register(AuthBearer, (err) => {
                         email: profile.email || "hi@hi",
                         token: token
                     });
-                } else {
-                    return callback(null, false, null);
-                }
-            });
+                //} else {
+                //    return callback(null, false, { token: token });
+                //}
+            //});
         }
     });
 
@@ -63,16 +65,26 @@ server.register(AuthBearer, (err) => {
         allowMultipleHeaders: false,        // optional, false by default
         accessTokenName: 'access_token',    // optional, 'access_token' by default
         validateFunc: function (token, callback) {
-
             var request = this;
 
+            const User = request.server.plugins['hapi-mongo-models'].User;
 
-            // Get user for token if token exists
-            if (token === "4321") {
-                return callback(null, true, { token: token });
-            }
+            User.findOne({
+                access_token: token
+            }, (err, result) => {
+                if (err) {
+                    return callback(null, false, { token: token });
+                }
 
-            return callback(null, false, { token: token });
+                return callback(null, true, {
+                    uuid: result.uuid,
+                    username: result.username,
+                    name: result.name,
+                    email: result.email,
+                    access_token: result.access_token,
+                    token: token
+                });
+            });
         }
     });
 });
@@ -85,36 +97,32 @@ server.route({
        handler: function (request, reply) {
             const User = request.server.plugins['hapi-mongo-models'].User;
 
-            try {
+            User.findOne({
+                facebookId: request.auth.credentials.token
+            }, (err, result) => {
+                if (!err) {
+                    User.insertOne({
+                        uuid: Uuid.v4(),
+                        username: request.auth.credentials.username,
+                        name: request.auth.credentials.name,
+                        email: request.auth.credentials.email,
+                        facebookId: request.auth.credentials.token,
+                        access_token: Uuid.v4().replace(/-/g, "")
+                    }, (err, result) => {
+                        if (err) {
+                            return reply(err);
+                        }
+                        console.log(result);
 
-                User.findOne({
-                    facebookId: request.auth.credentials.token
-                }, (err, result) => {
-                    if (err) {
-                        User.insertOne({
-                            uuid: Uuid.v4(),
-                            username: request.auth.credentials.username,
-                            name: request.auth.credentials.name,
-                            email: request.auth.credentials.email,
-                            facebookId: request.auth.credentials.token,
-                            access_token: Uuid.v4()
-                        }, (err, result) => {
-                            if (err) {
-                                return reply(err);
-                            }
+                        return reply(result);
+                    });
 
-                            return reply(result.access_token);
-                        });
+                } else {
+                    console.log(err);
+                    return reply(err);
+                }
 
-                    } else {
-                        return reply(result.access_token);
-                    }
-
-                });
-
-            } catch(err) {
-                return reply('fail api');
-            }
+            });
        }
     }
 });
@@ -155,7 +163,7 @@ server.route({
 
             try {
                 Item.findOne({
-                    uuid: request.
+                    uuid: request.query.id
                 }, (err, result) => {
                     if (err) {
                         return reply(err);
@@ -193,7 +201,8 @@ server.route({
             var data = request.payload;
 
             if (data.file) {
-                var name = data.file.hapi.filename; // TODO: Fix this
+                //var name = data.file.hapi.filename; // TODO: Fix this
+                var name = Uuid.v4();
                 var path = __dirname + "/data/" + name;
                 var file = fs.createWriteStream(path);
 
@@ -204,12 +213,11 @@ server.route({
                 data.file.pipe(file);
 
                 data.file.on('end', function (err) {
-                    dhash(path, function(err, hash){
-
+                    //dhash(path, function(err, hash){
                         Item.insertOne({
                             uuid: Uuid.v4(),
                             name: data.name,
-                            imageHash: hash,
+                            imageHash: name,
                             owner: request.auth.credentials.uuid,
                         }, (err, result) => {
                             if (err) {
@@ -220,9 +228,21 @@ server.route({
                         });
 
 
-                    });
+                    //});
                 })
             }
+        }
+    }
+});
+
+server.route({
+    method: 'GET',
+    path: '/static/{hash}',
+    config: {
+        auth: 'api_auth',
+        handler: function (request, reply) {
+            var path = __dirname + "/data/" + request.query.hash;
+            reply.file(path);
         }
     }
 });
