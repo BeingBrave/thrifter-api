@@ -1,27 +1,28 @@
 const Hapi = require('hapi');
 const Boom = require('boom');
 const AuthBearer = require('hapi-auth-bearer-token');
+const HapiMongoModels = require('hapi-mongo-models');
+const Request = require('request');
 
 const server = new Hapi.Server();
 server.connection({ port: 3333 });
 
-const dbOpts = {
-    "url": "mongodb://localhost:27017/test",
-    "settings": {
-        "db": {
-            "native_parser": false
+server.register({
+    register: HapiMongoModels,
+    options: {
+        mongodb: {
+          url: 'mongodb://localhost:27017/test',
+          options: {}
+        },
+        autoIndex: false,
+        models: {
+            User: './models/user.js'
         }
     }
-};
-
-server.register({
-    register: require('hapi-mongodb'),
-    options: dbOpts
 }, (err) => {
-    if (err) {
-        console.error(err);
-        throw err;
-    }
+     if (err) {
+         console.log('Failed connecting to database');
+     }
 });
 
 server.register(AuthBearer, (err) => {
@@ -30,18 +31,27 @@ server.register(AuthBearer, (err) => {
         allowMultipleHeaders: false,        // optional, false by default
         accessTokenName: 'access_token',    // optional, 'access_token' by default
         validateFunc: function (token, callback) {
-
             // For convenience, the request object can be accessed
             // from `this` within validateFunc.
             var request = this;
+            const User = request.server.plugins['hapi-mongo-models'].User;
 
-            // Use a real strategy here,
-            // comparing with a token from your database for example
-            if (token === "1234") {
-                return callback(null, true, { token: token });
-            }
+            Request('https://graph.facebook.com/me?access_token=' + token, function (error, response, body) {
+                console.log(response);
+                console.log(body);
+                if (!error && response.statusCode == 200) {
+                    var profile = JSON.parse(body);
 
-            return callback(null, false, { token: token });
+                    return callback(null, true, {
+                        username: profile.username,
+                        name: profile.name,
+                        email: profile.email,
+                        token: token
+                    });
+                } else {
+                    return callback(null, false, null);
+                }
+            });
         }
     });
 
@@ -51,12 +61,10 @@ server.register(AuthBearer, (err) => {
         accessTokenName: 'access_token',    // optional, 'access_token' by default
         validateFunc: function (token, callback) {
 
-            // For convenience, the request object can be accessed
-            // from `this` within validateFunc.
             var request = this;
 
-            // Use a real strategy here,
-            // comparing with a token from your database for example
+
+            // Get user for token if token exists
             if (token === "4321") {
                 return callback(null, true, { token: token });
             }
@@ -72,19 +80,68 @@ server.route({
     config: {
        auth: 'facebook_auth',
        handler: function (request, reply) {
-          return reply('success');
+            try {
+                User.insertOne({
+                    username: request.auth.credentials.username,
+                    name: request.auth.credentials.name,
+                    email: request.auth.credentials.email,
+                    facebookId: request.auth.credentials.token,
+                    access_token: "4321"
+                }, (err, result) => {
+                    if (err) {
+                        return reply(err);
+                    }
+
+                    return reply('success api');
+                });
+
+            } catch(err) {
+                return reply('fail api');
+            }
        }
     }
 });
 
 server.route({
     method: 'GET',
-    path: '/',
+    path: '/user',
     config: {
        auth: 'api_auth',
        handler: function (request, reply) {
-          return reply('success api');
+          try {
+                User.findOne({
+                    access_token: request.auth.credentials.token
+                }, (err, result) => {
+                    if (err) {
+                        return reply(err);
+                    }
+
+                    return reply(result);
+                });
+
+            } catch(err) {
+                return reply('fail api');
+            }
        }
+    }
+});
+
+server.route({
+    method: 'GET',
+    path: '/user/{id}',
+    config: {
+        auth: 'api_auth',
+        handler: function (request, reply) {
+            const User = request.server.plugins['hapi-mongo-models'].User;
+
+            User.findOne({access_token: request.query.access_token}, (err, results) => {
+                if (err) {
+                    return reply(err);
+                }
+
+                reply(results);
+            });
+        }
     }
 });
 
@@ -94,13 +151,7 @@ server.route({
     config: {
         auth: 'api_auth',
         handler: function (request, reply) {
-            var db = request.server.plugins['hapi-mongodb'].db;
-            var ObjectID = request.server.plugins['hapi-mongodb'].ObjectID;
 
-            db.collection('items').findOne({  "_id" : new ObjectID(request.params.id) }, function(err, result) {
-                if (err) return reply(Boom.internal('Internal MongoDB error', err));
-                reply(result);
-            });
         }
     }
 });
