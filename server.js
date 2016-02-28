@@ -8,13 +8,13 @@ const dhash = require('dhash');
 const fs = require('fs');
 
 const server = new Hapi.Server();
-server.connection({ port: 3333 });
+server.connection({ host: "0.0.0.0", port: 3333 });
 
 server.register({
     register: HapiMongoModels,
     options: {
         mongodb: {
-          url: 'mongodb://localhost:27017/test',
+          url: 'mongodb://mongodb:27017/thrifter',
           options: {}
         },
         autoIndex: false,
@@ -246,6 +246,15 @@ server.route({
         }
     }
 });
+
+server.route({
+    method: 'GET',
+    path: '/test',
+    handler: function (request, reply) {
+        reply("test");
+    }
+});
+
 
 
 server.start((err) => {

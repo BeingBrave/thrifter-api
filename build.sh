@@ -8,10 +8,6 @@ VERSION=$(cat package.json | grep '^.*version' | sed -s 's/[^0-9\.]//g')
 build() {
 	echo "Building version ${VERSION}"
 
-	# Built assets and frontend
-	npm install
-	gulp default --production
-
 	# Build docker image with server and assets
 	docker build -t ${IMAGE}:${VERSION} . | tee build.log || exit 1
 	ID=$(tail -1 build.log | awk '{print $3;}')
