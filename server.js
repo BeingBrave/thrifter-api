@@ -14,7 +14,7 @@ server.register({
     register: HapiMongoModels,
     options: {
         mongodb: {
-          url: 'mongodb://mongodb:27017/thrifter',
+          url: process.env.DB ? process.env.DB : 'mongodb://mongodb:27017/thrifter',
           options: {}
         },
         autoIndex: false,
@@ -40,11 +40,11 @@ server.register(AuthBearer, (err) => {
             var request = this;
             const User = request.server.plugins['hapi-mongo-models'].User;
 
-            //Request('https://graph.facebook.com/me?access_token=' + token, function (error, response, body) {
-                //console.log(response);
-                //console.log(body);
-                //if (!error && response.statusCode == 200) {
-                    //var profile = JSON.parse(body);
+            Request('https://graph.facebook.com/me?access_token=' + token, function (error, response, body) {
+                console.log(response);
+                console.log(body);
+                if (!error && response.statusCode == 200) {
+                    var profile = JSON.parse(body);
                     var profile = {};
 
                     return callback(null, true, {
@@ -53,10 +53,10 @@ server.register(AuthBearer, (err) => {
                         email: profile.email || "hi@hi",
                         token: token
                     });
-                //} else {
-                //    return callback(null, false, { token: token });
-                //}
-            //});
+                } else {
+                   return callback(null, false, { token: token });
+                }
+            });
         }
     });
 
@@ -75,6 +75,7 @@ server.register(AuthBearer, (err) => {
                 if (err) {
                     return callback(null, false, { token: token });
                 }
+                console.log(result);
 
                 return callback(null, true, {
                     uuid: result.uuid,
@@ -180,7 +181,7 @@ server.route({
 });
 
 /**
-*   POST: name, file
+*   POST: name, file, lat, lon
 *
 */
 server.route({
@@ -217,6 +218,7 @@ server.route({
                         Item.insertOne({
                             uuid: Uuid.v4(),
                             name: data.name,
+                            loc: [data.lat, data.lon],
                             imageHash: name,
                             owner: request.auth.credentials.uuid,
                         }, (err, result) => {
@@ -249,12 +251,26 @@ server.route({
 
 server.route({
     method: 'GET',
-    path: '/test',
-    handler: function (request, reply) {
-        reply("test");
+    path: '/search',
+    config: {
+        auth: 'api_auth',
+        handler: function (request, reply) {
+            const Item = request.server.plugins['hapi-mongo-models'].Item;
+            Item.find({
+                loc: {
+                    $near: [request.query.lat, request.query.lon],
+                    $maxDistance: request.query.distance / 6371
+                }
+            }, (err, result) => {
+                if (err) {
+                    return reply(err);
+                }
+
+                return reply(result);
+            });
+        }
     }
 });
-
 
 
 server.start((err) => {

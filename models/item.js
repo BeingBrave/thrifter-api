@@ -16,7 +16,8 @@ Item.schema = Joi.object().keys({
 	uuid: Joi.string(),
     imageHash: Joi.string().alphanum().required(),
     name: Joi.string().alphanum().required(),
-    owner: Joi.string()
+    owner: Joi.string(),
+    loc: Joi.object()
 })
 
 module.exports = Item;
