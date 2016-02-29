@@ -41,16 +41,13 @@ server.register(AuthBearer, (err) => {
             const User = request.server.plugins['hapi-mongo-models'].User;
 
             Request('https://graph.facebook.com/me?access_token=' + token, function (error, response, body) {
-                console.log(response);
-                console.log(body);
                 if (!error && response.statusCode == 200) {
                     var profile = JSON.parse(body);
-                    var profile = {};
 
                     return callback(null, true, {
-                        username: profile.username || "hi",
-                        name: profile.name || "hi",
-                        email: profile.email || "hi@hi",
+                        username: profile.username,
+                        name: profile.name,
+                        email: profile.email,
                         token: token
                     });
                 } else {
@@ -72,10 +69,9 @@ server.register(AuthBearer, (err) => {
             User.findOne({
                 access_token: token
             }, (err, result) => {
-                if (err) {
+                if (err || !result) {
                     return callback(null, false, { token: token });
                 }
-                console.log(result);
 
                 return callback(null, true, {
                     uuid: result.uuid,
@@ -215,10 +211,14 @@ server.route({
 
                 data.file.on('end', function (err) {
                     //dhash(path, function(err, hash){
+
                         Item.insertOne({
                             uuid: Uuid.v4(),
                             name: data.name,
-                            loc: [data.lat, data.lon],
+                            loc: {
+                                type: "Point",
+                                coordinates: [ parseFloat(data.lat), parseFloat(data.lon) ]
+                            },
                             imageHash: name,
                             owner: request.auth.credentials.uuid,
                         }, (err, result) => {
@@ -228,7 +228,6 @@ server.route({
 
                             return reply(result);
                         });
-
 
                     //});
                 })
@@ -256,22 +255,37 @@ server.route({
         auth: 'api_auth',
         handler: function (request, reply) {
             const Item = request.server.plugins['hapi-mongo-models'].Item;
+
+            // Wtf
+            Item.createIndexes([{ key: { "loc": "2dsphere" } }], (err, result) => {
+                if (err) {
+                    console.log(err);
+                }
+            });
+
+
             Item.find({
                 loc: {
-                    $near: [request.query.lat, request.query.lon],
-                    $maxDistance: request.query.distance / 6371
+                    $near: {
+                        $geometry: {
+                          type: 'Point',
+                          coordinates: [parseFloat(request.query.lat), parseFloat(request.query.lon)]
+                        },
+                        $maxDistance: parseInt(request.query.distance) / 6371
+                    }
                 }
             }, (err, result) => {
                 if (err) {
+                    console.log(err);
                     return reply(err);
                 }
 
+                console.log(result);
                 return reply(result);
             });
         }
     }
 });
-
 
 server.start((err) => {
     if (err) {

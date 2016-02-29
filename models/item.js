@@ -20,4 +20,8 @@ Item.schema = Joi.object().keys({
     loc: Joi.object()
 })
 
+Item.indexes = [
+    { key: { loc: "2dsphere" } }
+];
+
 module.exports = Item;
