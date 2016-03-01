@@ -172,6 +172,7 @@ server.route({
                     data: result
                 });
             });
+        }
     }
 });
 
