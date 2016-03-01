@@ -100,7 +100,7 @@ server.route({
             User.findOne({
                 facebookId: request.auth.credentials.token
             }, (err, result) => {
-                if (!err) {
+                if (err) {
                     User.insertOne({
                         uuid: Uuid.v4(),
                         username: request.auth.credentials.username,
@@ -112,14 +112,17 @@ server.route({
                         if (err) {
                             return reply(err);
                         }
-                        console.log(result);
 
-                        return reply(result);
+                        return reply({
+                            data: result
+                        });
                     });
 
                 } else {
-                    console.log(err);
-                    return reply(err);
+
+                    return reply({
+                        data: result
+                    });
                 }
 
             });
@@ -135,20 +138,17 @@ server.route({
        handler: function (request, reply) {
             const User = request.server.plugins['hapi-mongo-models'].User;
 
-            try {
-                User.findOne({
-                    access_token: request.auth.credentials.token
-                }, (err, result) => {
-                    if (err) {
-                        return reply(err);
-                    }
+            User.findOne({
+                access_token: request.auth.credentials.token
+            }, (err, result) => {
+                if (err) {
+                    return reply(Boom.badRequest("Could not get user"));
+                }
 
-                    return reply(result);
+                return reply({
+                    data: result
                 });
-
-            } catch(err) {
-                return reply('fail api');
-            }
+            });
         }
     }
 });
@@ -161,21 +161,17 @@ server.route({
         handler: function (request, reply) {
             const Item = request.server.plugins['hapi-mongo-models'].Item;
 
-            try {
-                Item.findOne({
-                    uuid: request.query.id
-                }, (err, result) => {
-                    if (err) {
-                        return reply(err);
-                    }
+            Item.findOne({
+                uuid: request.query.id
+            }, (err, result) => {
+                if (err) {
+                    return reply(Boom.badRequest("Could not get item"));
+                }
 
-                    return reply(result);
+                return reply({
+                    data: result
                 });
-
-            } catch(err) {
-                return reply('fail api');
-            }
-        }
+            });
     }
 });
 
@@ -199,42 +195,41 @@ server.route({
             const Item = request.server.plugins['hapi-mongo-models'].Item;
 
             var data = request.payload;
-            console.log(data);
 
             if (data.file) {
-                //var name = data.file.hapi.filename; // TODO: Fix this
                 var name = Uuid.v4();
                 var path = __dirname + "/data/" + name;
                 var file = fs.createWriteStream(path);
 
                 file.on('error', function (err) {
-                    console.error(err)
+                    console.log(err);
+                    return reply(Boom.badRequest("Could not upload"));
                 });
 
                 data.file.pipe(file);
 
                 data.file.on('end', function (err) {
-                    //dhash(path, function(err, hash){
+                    Item.insertOne({
+                        uuid: Uuid.v4(),
+                        name: data.name,
+                        loc: {
+                            type: "Point",
+                            coordinates: [ parseFloat(data.lat), parseFloat(data.lon) ]
+                        },
+                        imageHash: name,
+                        owner: request.auth.credentials.uuid,
+                    }, (err, result) => {
+                        if (err) {
+                            return reply(Boom.badRequest("Could not upload"));
+                        }
 
-                        Item.insertOne({
-                            uuid: Uuid.v4(),
-                            name: data.name,
-                            loc: {
-                                type: "Point",
-                                coordinates: [ parseFloat(data.lat), parseFloat(data.lon) ]
-                            },
-                            imageHash: name,
-                            owner: request.auth.credentials.uuid,
-                        }, (err, result) => {
-                            if (err) {
-                                return reply(err);
-                            }
-
-                            return reply(result);
+                        return reply({
+                            data: result
                         });
-
-                    //});
+                    });
                 })
+            } else {
+                return reply(Boom.badRequest("Invalid parameters"));
             }
         }
     }
@@ -247,7 +242,6 @@ server.route({
         auth: 'api_auth',
         handler: function (request, reply) {
             var path = "data/" + request.params.hash;
-            console.log(path);
             reply.file(path);
         }
     }
@@ -261,7 +255,7 @@ server.route({
         handler: function (request, reply) {
             const Item = request.server.plugins['hapi-mongo-models'].Item;
 
-            // Wtf
+            // TODO: Fix this
             Item.createIndexes([{ key: { "loc": "2dsphere" } }], (err, result) => {
                 if (err) {
                     console.log(err);
@@ -276,17 +270,17 @@ server.route({
                           type: 'Point',
                           coordinates: [parseFloat(request.query.lat), parseFloat(request.query.lon)]
                         },
-                        $maxDistance: parseInt(request.query.distance) / 6371
+                        $maxDistance: parseInt(request.query.distance ? request.query.distance : 100) / 6371
                     }
                 }
             }, (err, result) => {
                 if (err) {
-                    console.log(err);
-                    return reply(err);
+                    return reply(Boom.badRequest("Could not get search"));
                 }
 
-                console.log(result);
-                return reply(result);
+                return reply({
+                    data: result
+                });
             });
         }
     }

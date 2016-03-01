@@ -7,8 +7,6 @@
   },
   "dependencies": {
     "boom": "^3.1.2",
-    "dhash": "0.0.4",
-    "dhash-image": "^1.2.1",
     "hapi": "^13.0.0",
     "hapi-auth-bearer-token": "^4.0.0",
     "hapi-mongo-models": "^4.1.0",
