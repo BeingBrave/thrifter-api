@@ -1,4 +1,7 @@
-FROM node:onbuild
+#FROM node:onbuild
+FROM mhart/alpine-node:4.3.1
+
+RUN apk add --no-cache make gcc g++ python
 
 # use changes to package.json to force Docker not to use the cache
 # when we change our application's nodejs dependencies:

@@ -2,6 +2,7 @@ const Hapi = require('hapi');
 const Boom = require('boom');
 const AuthBearer = require('hapi-auth-bearer-token');
 const HapiMongoModels = require('hapi-mongo-models');
+const Inert = require('inert');
 const Uuid = require('node-uuid');
 const Request = require('request');
 const dhash = require('dhash');
@@ -9,6 +10,8 @@ const fs = require('fs');
 
 const server = new Hapi.Server();
 server.connection({ host: "0.0.0.0", port: 3333 });
+
+server.register(Inert, () => {});
 
 server.register({
     register: HapiMongoModels,
@@ -196,6 +199,7 @@ server.route({
             const Item = request.server.plugins['hapi-mongo-models'].Item;
 
             var data = request.payload;
+            console.log(data);
 
             if (data.file) {
                 //var name = data.file.hapi.filename; // TODO: Fix this
@@ -242,7 +246,8 @@ server.route({
     config: {
         auth: 'api_auth',
         handler: function (request, reply) {
-            var path = __dirname + "/data/" + request.query.hash;
+            var path = "data/" + request.params.hash;
+            console.log(path);
             reply.file(path);
         }
     }
