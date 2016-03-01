@@ -100,7 +100,8 @@ server.route({
             User.findOne({
                 facebookId: request.auth.credentials.token
             }, (err, result) => {
-                if (err) {
+                if (err || !result) {
+
                     User.insertOne({
                         uuid: Uuid.v4(),
                         username: request.auth.credentials.username,
@@ -119,7 +120,6 @@ server.route({
                     });
 
                 } else {
-
                     return reply({
                         data: result
                     });
@@ -215,7 +215,7 @@ server.route({
                         name: data.name,
                         loc: {
                             type: "Point",
-                            coordinates: [ parseFloat(data.lat), parseFloat(data.lon) ]
+                            coordinates: [ parseFloat(data.lon), parseFloat(data.lat) ]
                         },
                         imageHash: name,
                         owner: request.auth.credentials.uuid,
@@ -269,7 +269,7 @@ server.route({
                     $near: {
                         $geometry: {
                           type: 'Point',
-                          coordinates: [parseFloat(request.query.lat), parseFloat(request.query.lon)]
+                          coordinates: [parseFloat(request.query.lon), parseFloat(request.query.lat)]
                         },
                         $maxDistance: parseInt(request.query.distance ? request.query.distance : 100) / 6371
                     }
